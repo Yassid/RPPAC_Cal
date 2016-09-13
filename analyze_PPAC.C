@@ -14,6 +14,10 @@
 #include "TH2.h"
 #include "TMath.h"
 #include "TApplication.h"
+#include "TROOT.h"
+#include "Math/Minimizer.h"
+#include "Math/Factory.h"
+#include "Math/Functor.h"
 
 //OpenCV variables
 cv::Mat src, src_gray;
@@ -21,6 +25,8 @@ cv::Mat dst, detected_edges;
 
 void CannyThreshold(int, void*);
 cv::Mat rotate(cv::Mat src, double angle);
+Double_t Distance(const double* parameter);
+Int_t Minimizer(const char * minName, const char *algoName);
 
 int edgeThresh = 1;
 int lowThreshold;
@@ -29,6 +35,38 @@ int ratio = 3;
 int kernel_size = 3;
 char* window_name = "Edge Map";
 cv::RNG rng(12345);
+
+std::vector<Double_t> q_array1;
+std::vector<Double_t> q_array2;
+std::vector<Double_t> q_array3;
+std::vector<Double_t> q_array4;
+std::vector<Double_t> q_norm1;
+std::vector<Double_t> q_norm2;
+std::vector<Double_t> q_norm3;
+std::vector<Double_t> q_norm4;
+std::vector<Double_t> q_mean;
+std::vector<Double_t> x_d;
+std::vector<Double_t> y_d;
+std::vector<Double_t> x_u;
+std::vector<Double_t> y_u;
+
+TH1I* hadc[4];
+TH2D* XY_hist;
+TH2D* XY_hist_u;
+TH2D* XY_hist_edge;
+TH2D* XY_square;
+
+Double_t theta;
+Double_t rad_d;
+Double_t k1;
+Double_t k2;
+
+Double_t norm_fact;
+Int_t L; //Square dimension
+
+Double_t* parameter;
+Int_t num_par;
+  
 
 
 Int_t main(int argc, char** argv)
@@ -46,43 +84,32 @@ Int_t main(int argc, char** argv)
 
  TCanvas *c3 = new TCanvas();
 
-  TH1I* hadc[4];
+  
   for (Int_t i=0;i<4;i++) hadc[i] = new TH1I(Form("hadc[%i]",i),Form("hadc%i",i),1000,0,4000);
 
-  TH2D* XY_hist = new TH2D("XY_hist","XY_hist",1000,-50,50,1000,-50,50);
-  TH2D* XY_hist_u = new TH2D("XY_hist_u","XY_hist_u",1000,-50,50,1000,-50,50);
-  TH2D* XY_hist_edge = new TH2D("XY_hist_edge","XY_hist_edge",1000,-50,50,1000,-50,50);
-  TH2D* XY_square = new TH2D("XY_square","XY_square",1000,-50,50,1000,-50,50);
+  XY_hist = new TH2D("XY_hist","XY_hist",1000,-50,50,1000,-50,50);
+  XY_hist_u = new TH2D("XY_hist_u","XY_hist_u",1000,-50,50,1000,-50,50);
+  XY_hist_edge = new TH2D("XY_hist_edge","XY_hist_edge",1000,-50,50,1000,-50,50);
+  XY_square = new TH2D("XY_square","XY_square",1000,-50,50,1000,-50,50);
 
-  TString filename = "../out40.txt";
+  TString filename = "../run103.txt";
   std::ifstream fData(filename,std::ios::binary);
   UInt_t header = 0;
   UInt_t adc[4];
-  std::vector<Double_t> q_array1;
-  std::vector<Double_t> q_array2;
-  std::vector<Double_t> q_array3;
-  std::vector<Double_t> q_array4;
-  std::vector<Double_t> q_norm1;
-  std::vector<Double_t> q_norm2;
-  std::vector<Double_t> q_norm3;
-  std::vector<Double_t> q_norm4;
-  std::vector<Double_t> q_mean;
   q_mean.reserve(4);
   for(Int_t i=0;i<4;i++)q_mean[i]=0.0;
-  std::vector<Double_t> x_d;
-  std::vector<Double_t> y_d;
-  std::vector<Double_t> x_u;
-  std::vector<Double_t> y_u;
   Int_t q_cnt = 0;
   std::string strbuff;
   Int_t n= 4;
-  Double_t norm_fact = 100.0;
-  Int_t L = 100.0; //Square dimension
+  
 
   Char_t * buffer = new char [n];
 
   std::string line;
   Int_t nEve = 0;
+
+  norm_fact = 100.0;
+  L = 110.0; //Square dimension
 
   while(std::getline(fData, line)){
     nEve++;
@@ -134,11 +161,119 @@ Int_t main(int argc, char** argv)
     q_mean[i]/=q_cnt;
 
   // Analysis and Reconstruction
-  Double_t theta=0.0;
-  Double_t rad_d=0.0;
-  Double_t k =0.0015;
+  theta=0.0;
+  rad_d=0.0;
+  k1 =0.0015;
+  k2 =0.0000;
 
-  for(Int_t i=0;i<q_array1.size();i++){
+  num_par=2;
+  parameter = new Double_t[num_par];
+  parameter[0] = k1;
+  parameter[1] = k2;
+
+
+  Double_t min_dist = Distance(parameter);
+  std::cout<<" Minimum distance : "<<min_dist<<std::endl; 
+  Minimizer("Minuit","Migrad");
+
+
+		 // Draw the contour with CV. Not useful for the moment
+		 /*std::vector<std::vector<cv::Point> > contours_poly( contours.size() );
+  		 std::vector<cv::Rect> boundRect( contours.size() );
+  		 std::vector<cv::Point2f>center( contours.size() );
+  		 std::vector<float>radius( contours.size() );
+
+
+		  for( int i = 0; i < contours.size(); i++ )
+     		  { 
+			cv::approxPolyDP( cv::Mat(contours[i]), contours_poly[i], 3, true );
+       			boundRect[i] = boundingRect( cv::Mat(contours_poly[i]) );
+       			cv::minEnclosingCircle( (cv::Mat)contours_poly[i], center[i], radius[i] );
+     		  }
+
+		  cv::Mat drawing = cv::Mat::zeros( edge.size(), CV_8UC3 );
+		  for( int i = 0; i< contours.size(); i++ )
+		     {
+		       cv::Scalar color = cv::Scalar( rng.uniform(0, 255), rng.uniform(0,255), rng.uniform(0,255) );
+		       cv::drawContours( drawing, contours_poly, i, color, 1, 8, std::vector<cv::Vec4i>(), 0, cv::Point() );
+		       cv::rectangle( drawing, boundRect[i].tl(), boundRect[i].br(), color, 2, 8, 0 );
+		       //cv::circle( drawing, center[i], (int)radius[i], color, 2, 8, 0 );
+		     }
+		 */
+		 ////////////////////////////////////////////////////////////////////////
+
+		 //cv::namedWindow( "Contours", CV_WINDOW_AUTOSIZE );
+  		 //cv::imshow( "Contours", drawing );
+		 //cv::waitKey(0);
+
+		 /*cv::createTrackbar( "Min Threshold:", window_name, &lowThreshold, max_lowThreshold, CannyThreshold );
+		 CannyThreshold(0, 0);
+		 dst = cv::Scalar::all(0);
+                 src.copyTo( dst, detected_edges);
+		 cv::imshow( window_name, dst );*/
+
+
+  c1->cd(1);
+  hadc[0]->SetLineColor(kRed);
+  hadc[0]->Draw();
+  c1->cd(2);
+  hadc[1]->SetLineColor(kBlack);
+  hadc[1]->Draw();
+  c1->cd(3);
+  hadc[2]->SetLineColor(kBlue);
+  hadc[2]->Draw();
+  c1->cd(4);
+  hadc[3]->SetLineColor(kGreen);
+  hadc[3]->Draw();
+
+  c2->cd(1);
+  XY_hist->Draw("zcol");
+  c2->cd(2);
+  XY_hist_u->Draw("zcol");
+
+  c3->cd();
+  XY_hist_u->Draw("zcol");
+  XY_hist_edge->SetMarkerSize(0.5);
+  XY_hist_edge->Draw("SAME");
+  XY_square->SetMarkerColor(kRed);
+  XY_square->SetMarkerSize(0.5);
+  XY_square->Draw("SAMES");
+  //c3->SaveAs("ppac.eps");
+
+
+  fData.close();
+  theApp.Run();
+  return 0;
+
+
+}
+
+Int_t Minimizer(const char * minName, const char *algoName){
+
+
+	std::cout<<" Parameter 0 : "<<parameter[0]<<std::endl;
+	ROOT::Math::Minimizer* min = ROOT::Math::Factory::CreateMinimizer(minName, algoName);
+	min->SetMaxFunctionCalls(1000000);
+        min->SetMaxIterations(5);
+	min->SetTolerance(0.001);
+	min->SetPrecision(0.001);
+	min->SetPrintLevel(1);
+
+	ROOT::Math::Functor f(&Distance,num_par);
+	min->SetFunction(f);
+        min->SetLimitedVariable(0,"p0",parameter[0],0.0001,0,0.0030);
+	min->SetLimitedVariable(1,"p1",parameter[1],0.0001,0,0.0030);
+	min->Minimize();
+
+
+
+}
+
+
+Double_t Distance(const double* parameter)
+{
+
+	 for(Int_t i=0;i<q_array1.size();i++){
 
           q_norm1.push_back(q_array1.at(i)*norm_fact/q_mean[0]);
           q_norm2.push_back(q_array2.at(i)*norm_fact/q_mean[1]);
@@ -155,17 +290,14 @@ Int_t main(int argc, char** argv)
             theta = TMath::ATan2(y_d.at(i),x_d.at(i));
             rad_d = TMath::Sqrt( TMath::Power(x_d.at(i),2) + TMath::Power(y_d.at(i),2)      );
 
-            x_u.push_back( (rad_d/(1+k*TMath::Power(rad_d,2)) )*TMath::Cos(theta)              );
-            y_u.push_back( (rad_d/(1+k*TMath::Power(rad_d,2)) )*TMath::Sin(theta)              );
+            x_u.push_back( (rad_d/(1+parameter[0]*TMath::Power(rad_d,2)  +   parameter[1]*TMath::Power(rad_d,2)  ) )*TMath::Cos(theta)      );
+            y_u.push_back( (rad_d/(1+parameter[0]*TMath::Power(rad_d,2)  +   parameter[1]*TMath::Power(rad_d,2)  ) )*TMath::Sin(theta)      );
 
             XY_hist_u->Fill(x_u.at(i),y_u.at(i));
 
   }
 
-
-   
-    
-		 cv::Mat src(1000,1000,cv::DataType<double>::type);
+  		cv::Mat src(1000,1000,cv::DataType<double>::type);
  	         for(Int_t i=0;i<1000;i++)
 		   for(Int_t j=0;j<1000;j++){
 				 if(XY_hist_u->GetBinContent(i,j)>0) src.at<double>(i,j) = 100.0; 
@@ -257,71 +389,9 @@ Int_t main(int argc, char** argv)
 		 std::cout<<" Mean distance from the contour to the center : "<<dist_acc/(Double_t) dist_cnt<<std::endl;
 		 std::cout<<" Mean distance from the square to the center : "<<dist_acc_sqr/(Double_t)sq_pnt<<std::endl;
 
-		 std::vector<std::vector<cv::Point> > contours_poly( contours.size() );
-  		 std::vector<cv::Rect> boundRect( contours.size() );
-  		 std::vector<cv::Point2f>center( contours.size() );
-  		 std::vector<float>radius( contours.size() );
+		 Double_t min_dist = TMath::Abs(dist_acc/(Double_t) dist_cnt - dist_acc_sqr/(Double_t)sq_pnt);
 
-
-		  for( int i = 0; i < contours.size(); i++ )
-     		  { 
-			cv::approxPolyDP( cv::Mat(contours[i]), contours_poly[i], 3, true );
-       			boundRect[i] = boundingRect( cv::Mat(contours_poly[i]) );
-       			cv::minEnclosingCircle( (cv::Mat)contours_poly[i], center[i], radius[i] );
-     		  }
-
-		  cv::Mat drawing = cv::Mat::zeros( edge.size(), CV_8UC3 );
-		  for( int i = 0; i< contours.size(); i++ )
-		     {
-		       cv::Scalar color = cv::Scalar( rng.uniform(0, 255), rng.uniform(0,255), rng.uniform(0,255) );
-		       cv::drawContours( drawing, contours_poly, i, color, 1, 8, std::vector<cv::Vec4i>(), 0, cv::Point() );
-		       cv::rectangle( drawing, boundRect[i].tl(), boundRect[i].br(), color, 2, 8, 0 );
-		       //cv::circle( drawing, center[i], (int)radius[i], color, 2, 8, 0 );
-		     }
-
-		 //cv::namedWindow( "Contours", CV_WINDOW_AUTOSIZE );
-  		 //cv::imshow( "Contours", drawing );
-		 //cv::waitKey(0);
-
-		 /*cv::createTrackbar( "Min Threshold:", window_name, &lowThreshold, max_lowThreshold, CannyThreshold );
-		 CannyThreshold(0, 0);
-		 dst = cv::Scalar::all(0);
-                 src.copyTo( dst, detected_edges);
-		 cv::imshow( window_name, dst );*/
-
-
-  c1->cd(1);
-  hadc[0]->SetLineColor(kRed);
-  hadc[0]->Draw();
-  c1->cd(2);
-  hadc[1]->SetLineColor(kBlack);
-  hadc[1]->Draw();
-  c1->cd(3);
-  hadc[2]->SetLineColor(kBlue);
-  hadc[2]->Draw();
-  c1->cd(4);
-  hadc[3]->SetLineColor(kGreen);
-  hadc[3]->Draw();
-
-  c2->cd(1);
-  XY_hist->Draw("zcol");
-  c2->cd(2);
-  XY_hist_u->Draw("zcol");
-
-  c3->cd();
-  XY_hist_u->Draw("zcol");
-  XY_hist_edge->SetMarkerSize(0.5);
-  XY_hist_edge->Draw("SAME");
-  XY_square->SetMarkerColor(kRed);
-  XY_square->SetMarkerSize(0.5);
-  XY_square->Draw("SAMES");
-  //c3->SaveAs("ppac.eps");
-
-
-  fData.close();
-  theApp.Run();
-  return 0;
-
+		 return min_dist;
 
 }
 
@@ -348,3 +418,5 @@ cv::Mat rotate(cv::Mat src, double angle)
     cv::warpAffine(src, dst, r, cv::Size(src.cols, src.rows));
     return dst;
 }
+
+
