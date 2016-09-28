@@ -93,7 +93,7 @@ Int_t main(int argc, char** argv)
   XY_hist_edge = new TH2D("XY_hist_edge","XY_hist_edge",1000,-50,50,1000,-50,50);
   XY_square = new TH2D("XY_square","XY_square",1000,-50,50,1000,-50,50);
 
-  TString filename = "../out40.txt";
+  TString filename = "../run106.txt";
   std::ifstream fData(filename,std::ios::binary);
   UInt_t header = 0;
   UInt_t adc[4];
@@ -102,6 +102,9 @@ Int_t main(int argc, char** argv)
   Int_t q_cnt = 0;
   std::string strbuff;
   Int_t n= 4;
+
+  // Flat field calibration
+  Bool_t kFlatCal =1;
 
 
   Char_t * buffer = new char [n];
@@ -161,6 +164,18 @@ Int_t main(int argc, char** argv)
   for(Int_t i=0;i<4;i++)
     q_mean[i]/=q_cnt;
 
+
+   if(kFlatCal ==1){
+
+	std::cout<<" Using previous calibrated data "<<std::endl; 
+	q_mean[0] = 244.4;
+	q_mean[1] = 234.6;
+	q_mean[2] = 159.6;
+	q_mean[3] = 162.2;
+
+   }
+
+
   // Analysis and Reconstruction
   theta=0.0;
   rad_d=0.0;
@@ -175,7 +190,7 @@ Int_t main(int argc, char** argv)
 
   Double_t min_dist = Distance(parameter);
   std::cout<<" Minimum distance : "<<min_dist<<std::endl;
-  Minimizer("Minuit","Migrad");
+  //Minimizer("Minuit","Migrad");  // Temporary disabled
 
 
 		 // Draw the contour with CV. Not useful for the moment
@@ -294,10 +309,11 @@ Double_t Distance(const double* parameter)
 {
 
    Reset();
+   std::ofstream kineStr;
+   kineStr.open("data_Qcal.txt");
 
 
-
-	 for(Int_t i=0;i<q_array1.size();i++){
+    for(Int_t i=0;i<q_array1.size();i++){
 
           q_norm1.push_back(q_array1.at(i)*norm_fact/q_mean[0]);
           q_norm2.push_back(q_array2.at(i)*norm_fact/q_mean[1]);
@@ -311,15 +327,24 @@ Double_t Distance(const double* parameter)
 
             XY_hist->Fill(x_d.at(i),y_d.at(i));
 
+	    //kineStr<<x_d.at(i)<<"	"<<y_d.at(i)<<std::endl;
+
+
     }
+
+
+	Double_t X_mean = XY_hist->GetMean(1);
+        Double_t Y_mean = XY_hist->GetMean(2);
 
 
      for(Int_t i=0;i<q_array1.size();i++){
 
-            Double_t X_mean = XY_hist->GetMean(1);
-            Double_t Y_mean = XY_hist->GetMean(2);
+            
             x_d.at(i)-=X_mean;
             y_d.at(i)-=Y_mean;
+
+	    kineStr<<x_d.at(i)<<"	"<<y_d.at(i)<<std::endl;
+
             theta = TMath::ATan2(y_d.at(i),x_d.at(i));
             rad_d = TMath::Sqrt( TMath::Power(x_d.at(i),2) + TMath::Power(y_d.at(i),2)      );
 
@@ -327,6 +352,7 @@ Double_t Distance(const double* parameter)
             y_u.push_back( (rad_d/(1+parameter[0]*TMath::Power(rad_d,2)  +   parameter[1]*TMath::Power(rad_d,4)  ) )*TMath::Sin(theta)      );
 
             XY_hist_u->Fill(x_u.at(i),y_u.at(i));
+
 
   }
 
