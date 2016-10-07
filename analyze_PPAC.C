@@ -34,6 +34,7 @@ Int_t Minimizer(const char * minName, const char *algoName);
 void Reset();
 
 Double_t EvalFit(Double_t *_var, Double_t *_par);
+Double_t EvalFit2(Double_t x,Double_t y, Double_t *par);
 
 
 int edgeThresh = 1;
@@ -63,6 +64,8 @@ TH2D* XY_hist;
 TH2D* XY_hist_u;
 TH2D* XY_hist_edge;
 TH2D* XY_square;
+
+TH2D* XY_cal;
 
 Double_t theta;
 Double_t rad_d;
@@ -119,6 +122,8 @@ Int_t main(int argc, char** argv)
   XY_hist_u = new TH2D("XY_hist_u","XY_hist_u",1000,-50,50,1000,-50,50);
   XY_hist_edge = new TH2D("XY_hist_edge","XY_hist_edge",1000,-50,50,1000,-50,50);
   XY_square = new TH2D("XY_square","XY_square",1000,-50,50,1000,-50,50);
+
+  XY_cal = new TH2D("XY_cal","XY_cal",1000,-50,50,1000,-50,50);
 
   TString filename = "../run106.txt";
   std::ifstream fData(filename,std::ios::binary);
@@ -215,8 +220,8 @@ Int_t main(int argc, char** argv)
   parameter[1] = k2;
 
 
-  Double_t min_dist = Distance(parameter);
-  std::cout<<" Minimum distance : "<<min_dist<<std::endl;
+  //Double_t min_dist = Distance(parameter);
+  //std::cout<<" Minimum distance : "<<min_dist<<std::endl;
   //Minimizer("Minuit","Migrad");  // Temporary disabled
 
 		
@@ -248,6 +253,36 @@ Int_t main(int argc, char** argv)
   //c3->SaveAs("ppac.eps");
 
 
+  //// New calibration
+
+	std::ifstream *dataQcal = new std::ifstream("../data_Qcal.txt");
+
+	Int_t eve = 0;
+	Double_t dummy1,dummy2;
+	Double_t x_qd,y_qd;
+	Double_t x_corr,y_corr;
+	Double_t var[2] = {0.0,0.0};
+
+	 while(!dataQcal->eof()){
+		*dataQcal>>x_qd>>y_qd;
+		//*dataQcal>>x_qd>>y_qd>>dummy1>>dummy2;
+		var[0] = x_qd;
+                var[1] = y_qd;
+	    	x_corr = x_qd+EvalFit(var,parx);
+	        //x_corr = x_qd+EvalFit2(x_qd,y_qd,parx);
+	    	var[0] = y_qd;
+                var[1] = x_qd;
+	        y_corr = y_qd+EvalFit(var,pary);
+                //y_corr = y_qd+EvalFit2(y_qd,x_qd,pary);
+		XY_cal->Fill(x_corr,y_corr);
+
+	}
+
+
+	TCanvas *c_cal = new TCanvas();
+	XY_cal->Draw("zcol");
+
+  std::cout<<" End of the program "<<std::endl;
   fData.close();
   theApp.Run();
   return 0;
@@ -348,12 +383,13 @@ Double_t Distance(const double* parameter)
 
 	    std::cout<<" Entry : "<<i<<"/"<<q_array1.size()<<std::endl;
 
-	    Double_t var[2] = {_x_buff,_y_buff};
-	    x_u.push_back(x_d.at(i)+EvalFit(var,parx));
-	    var[0] = _y_buff;
-            var[1] = _x_buff;
-	    y_u.push_back(y_d.at(i)+EvalFit(var,pary));
-            //y_u.push_back(y_d.at(i));
+	    //Double_t var[2] = {_x_buff,_y_buff};
+	    //x_u.push_back(x_d.at(i)+EvalFit(var,parx));
+	    //x_u.push_back(x_d.at(i)+EvalFit2(_x_buff,_y_buff,parx));
+	    //var[0] = _y_buff;
+            //var[1] = _x_buff;
+	    //y_u.push_back(y_d.at(i)+EvalFit(var,pary));
+            //y_u.push_back(y_d.at(i)+EvalFit2(_y_buff,_x_buff,pary));
 
 
             XY_hist_u->Fill(x_u.at(i),y_u.at(i));
@@ -488,6 +524,15 @@ Double_t EvalFit(Double_t *_var, Double_t *_p)
 
 
 	Double_t result = fsum.EvalPar(_var,_p);
+	return result;
+
+}
+
+Double_t EvalFit2(Double_t x, Double_t y,Double_t *p)
+{
+
+
+	Double_t result = p[0] + x*p[1] + y*p[2] + x*y*p[3] + y*y*p[4] + x*x*p[5] + y*y*y*p[6]  + x*y*y*p[7] + x*x*y*p[8] + x*x*x*p[9] + y*y*y*y*x*p[10] + x*y*y*y*p[11] + 		x*x*x*y*y*p[12]; 
 	return result;
 
 }
