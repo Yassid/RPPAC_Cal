@@ -10,14 +10,18 @@
 #include <stdio.h>
 
 #include "TH1.h"
+#include "TF2.h"
+#include "TGraph.h"
 #include "TCanvas.h"
 #include "TH2.h"
+#include "TF1.h"
 #include "TMath.h"
 #include "TApplication.h"
 #include "TROOT.h"
 #include "Math/Minimizer.h"
 #include "Math/Factory.h"
 #include "Math/Functor.h"
+#include "Math/ParamFunctor.h"
 
 //OpenCV variables
 cv::Mat src, src_gray;
@@ -28,6 +32,8 @@ cv::Mat rotate(cv::Mat src, double angle);
 Double_t Distance(const double* parameter);
 Int_t Minimizer(const char * minName, const char *algoName);
 void Reset();
+
+Double_t EvalFit(Double_t *_var, Double_t *_par);
 
 int edgeThresh = 1;
 int lowThreshold;
@@ -192,41 +198,10 @@ Int_t main(int argc, char** argv)
   std::cout<<" Minimum distance : "<<min_dist<<std::endl;
   //Minimizer("Minuit","Migrad");  // Temporary disabled
 
-
-		 // Draw the contour with CV. Not useful for the moment
-		 /*std::vector<std::vector<cv::Point> > contours_poly( contours.size() );
-  		 std::vector<cv::Rect> boundRect( contours.size() );
-  		 std::vector<cv::Point2f>center( contours.size() );
-  		 std::vector<float>radius( contours.size() );
-
-
-		  for( int i = 0; i < contours.size(); i++ )
-     		  {
-			cv::approxPolyDP( cv::Mat(contours[i]), contours_poly[i], 3, true );
-       			boundRect[i] = boundingRect( cv::Mat(contours_poly[i]) );
-       			cv::minEnclosingCircle( (cv::Mat)contours_poly[i], center[i], radius[i] );
-     		  }
-
-		  cv::Mat drawing = cv::Mat::zeros( edge.size(), CV_8UC3 );
-		  for( int i = 0; i< contours.size(); i++ )
-		     {
-		       cv::Scalar color = cv::Scalar( rng.uniform(0, 255), rng.uniform(0,255), rng.uniform(0,255) );
-		       cv::drawContours( drawing, contours_poly, i, color, 1, 8, std::vector<cv::Vec4i>(), 0, cv::Point() );
-		       cv::rectangle( drawing, boundRect[i].tl(), boundRect[i].br(), color, 2, 8, 0 );
-		       //cv::circle( drawing, center[i], (int)radius[i], color, 2, 8, 0 );
-		     }
-		 */
-		 ////////////////////////////////////////////////////////////////////////
-
-		 //cv::namedWindow( "Contours", CV_WINDOW_AUTOSIZE );
-  		 //cv::imshow( "Contours", drawing );
-		 //cv::waitKey(0);
-
-		 /*cv::createTrackbar( "Min Threshold:", window_name, &lowThreshold, max_lowThreshold, CannyThreshold );
-		 CannyThreshold(0, 0);
-		 dst = cv::Scalar::all(0);
-                 src.copyTo( dst, detected_edges);
-		 cv::imshow( window_name, dst );*/
+	Double_t parx[13] = {0.2591E+01,0.2141E+01,0.2982E-01,0.3252E-01,-.2188E-01,0.1485E-01,-.4089E-04,-.1306E-01,0.1150E-03,0.7579E-02,0.2000E-04,-.3663E-04,-.1430E-04}; 
+	Double_t var[2] = {1.0,2.0};
+	EvalFit(var,parx);
+		
 
 
   c1->cd(1);
@@ -270,16 +245,16 @@ Int_t Minimizer(const char * minName, const char *algoName){
 	std::cout<<" Parameter 0 : "<<parameter[0]<<std::endl;
 	ROOT::Math::Minimizer* min = ROOT::Math::Factory::CreateMinimizer(minName, algoName);
 	min->SetMaxFunctionCalls(1000000);
-  min->SetMaxIterations(5);
+         min->SetMaxIterations(5);
 	min->SetTolerance(0.001);
 	min->SetPrecision(0.001);
 	min->SetPrintLevel(1);
 
 	ROOT::Math::Functor f(&Distance,num_par);
 	min->SetFunction(f);
-  min->SetLimitedVariable(0,"p0",parameter[0],0.00001,0,0.0030);
+        min->SetLimitedVariable(0,"p0",parameter[0],0.00001,0,0.0030);
 	//min->SetLimitedVariable(1,"p1",parameter[1],0.00001,0,0.0030);
-  min->SetFixedVariable(1,"p1",parameter[1]);
+        min->SetFixedVariable(1,"p1",parameter[1]);
 	min->Minimize();
 
 
@@ -477,3 +452,71 @@ cv::Mat rotate(cv::Mat src, double angle)
     cv::warpAffine(src, dst, r, cv::Size(src.cols, src.rows));
     return dst;
 }
+
+Double_t EvalFit(Double_t *_var, Double_t *_p)
+{
+
+	
+	TF1 f1("f1","x");
+	TF1 f2("f2","x");
+	TF2 f3("f3","x*y");
+        TF1 f4("f4","x*x");
+	TF1 f5("f5","x*x");
+	TF1 f6("f6","x*x*x");	
+	TF2 f7("f7","x*y*y");
+	TF2 f8("f7","x*x*y");
+	TF1 f9("f9","x*x*x");
+	TF2 f10("f10","x*y*y*y*y");
+	TF2 f11("f11","x*y*y*y");
+	TF2 f12("f12","x*x*x*y*y");
+
+
+	TF2 fsum("fsum",[&](double *var, double *p){ return p[0] + p[1]*f1(var[0]) + p[2]*f2(var[1]) + p[3]*f3(var[0],var[1]) 
+	+ p[4]*f4(var[1]) + p[5]*f5(var[0]) + p[6]*f6(var[1]) + p[7]*f7(var[0],var[1]) + p[8]*f8(var[0],var[1]) + p[9]*f9(var[0]) 
+	+ p[10]*f10(var[0],var[1]) + p[11]*f11(var[0],var[1]) + p[12]*f12(var[0],var[1])  ; },-50,50,-50,50,3);
+
+	Double_t result = fsum.EvalPar(_var,_p);
+	//std::cout<<result<<std::endl;	
+
+	return result;
+
+}
+
+
+///////////
+ // Draw the contour with CV. Not useful for the moment
+		 /*std::vector<std::vector<cv::Point> > contours_poly( contours.size() );
+  		 std::vector<cv::Rect> boundRect( contours.size() );
+  		 std::vector<cv::Point2f>center( contours.size() );
+  		 std::vector<float>radius( contours.size() );
+
+
+		  for( int i = 0; i < contours.size(); i++ )
+     		  {
+			cv::approxPolyDP( cv::Mat(contours[i]), contours_poly[i], 3, true );
+       			boundRect[i] = boundingRect( cv::Mat(contours_poly[i]) );
+       			cv::minEnclosingCircle( (cv::Mat)contours_poly[i], center[i], radius[i] );
+     		  }
+
+		  cv::Mat drawing = cv::Mat::zeros( edge.size(), CV_8UC3 );
+		  for( int i = 0; i< contours.size(); i++ )
+		     {
+		       cv::Scalar color = cv::Scalar( rng.uniform(0, 255), rng.uniform(0,255), rng.uniform(0,255) );
+		       cv::drawContours( drawing, contours_poly, i, color, 1, 8, std::vector<cv::Vec4i>(), 0, cv::Point() );
+		       cv::rectangle( drawing, boundRect[i].tl(), boundRect[i].br(), color, 2, 8, 0 );
+		       //cv::circle( drawing, center[i], (int)radius[i], color, 2, 8, 0 );
+		     }
+		 */
+		 ////////////////////////////////////////////////////////////////////////
+
+		 //cv::namedWindow( "Contours", CV_WINDOW_AUTOSIZE );
+  		 //cv::imshow( "Contours", drawing );
+		 //cv::waitKey(0);
+
+		 /*cv::createTrackbar( "Min Threshold:", window_name, &lowThreshold, max_lowThreshold, CannyThreshold );
+		 CannyThreshold(0, 0);
+		 dst = cv::Scalar::all(0);
+                 src.copyTo( dst, detected_edges);
+		 cv::imshow( window_name, dst );*/
+
+
