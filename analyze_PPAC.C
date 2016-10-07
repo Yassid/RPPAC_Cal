@@ -35,6 +35,7 @@ void Reset();
 
 Double_t EvalFit(Double_t *_var, Double_t *_par);
 
+
 int edgeThresh = 1;
 int lowThreshold;
 int const max_lowThreshold = 100;
@@ -73,6 +74,26 @@ Int_t L; //Square dimension
 
 Double_t* parameter;
 Int_t num_par;
+
+Double_t parx[13] = {0.2591E+01,0.2141E+01,0.2982E-01,0.3252E-01,-.2188E-01,0.1485E-01,-.4089E-04,-.1306E-01,0.1150E-03,0.7579E-02,0.2000E-04,-.3663E-04,-.1430E-04}; 
+Double_t pary[13] = {0.1998E+01,0.2067E+01,0.1024E+00,0.2169E-02,-.2158E-01,0.5539E-02,-.3666E-03,-.1072E-01,0.2460E-03,0.6882E-02,0.1294E-04,-.3207E-05,-.1100E-04};
+
+TF1 f1("f1","x");
+TF1 f2("f2","x");
+TF2 f3("f3","x*y");
+TF1 f4("f4","x*x");
+TF1 f5("f5","x*x");
+TF1 f6("f6","x*x*x");	
+TF2 f7("f7","x*y*y");
+TF2 f8("f7","x*x*y");
+TF1 f9("f9","x*x*x");
+TF2 f10("f10","x*y*y*y*y");
+TF2 f11("f11","x*y*y*y");
+TF2 f12("f12","x*x*x*y*y");
+
+TF2 fsum("fsum",[&](double *var, double *p){ return p[0] + p[1]*f1(var[0]) + p[2]*f2(var[1]) + p[3]*f3(var[0],var[1]) 
+	+ p[4]*f4(var[1]) + p[5]*f5(var[0]) + p[6]*f6(var[1]) + p[7]*f7(var[0],var[1]) + p[8]*f8(var[0],var[1]) + p[9]*f9(var[0]) 
+	+ p[10]*f10(var[0],var[1]) + p[11]*f11(var[0],var[1]) + p[12]*f12(var[0],var[1])  ; },-50,50,-50,50,13);
 
 
 
@@ -198,12 +219,7 @@ Int_t main(int argc, char** argv)
   std::cout<<" Minimum distance : "<<min_dist<<std::endl;
   //Minimizer("Minuit","Migrad");  // Temporary disabled
 
-	Double_t parx[13] = {0.2591E+01,0.2141E+01,0.2982E-01,0.3252E-01,-.2188E-01,0.1485E-01,-.4089E-04,-.1306E-01,0.1150E-03,0.7579E-02,0.2000E-04,-.3663E-04,-.1430E-04}; 
-	Double_t var[2] = {1.0,2.0};
-	EvalFit(var,parx);
 		
-
-
   c1->cd(1);
   hadc[0]->SetLineColor(kRed);
   hadc[0]->Draw();
@@ -245,7 +261,7 @@ Int_t Minimizer(const char * minName, const char *algoName){
 	std::cout<<" Parameter 0 : "<<parameter[0]<<std::endl;
 	ROOT::Math::Minimizer* min = ROOT::Math::Factory::CreateMinimizer(minName, algoName);
 	min->SetMaxFunctionCalls(1000000);
-         min->SetMaxIterations(5);
+        min->SetMaxIterations(5);
 	min->SetTolerance(0.001);
 	min->SetPrecision(0.001);
 	min->SetPrintLevel(1);
@@ -288,6 +304,7 @@ Double_t Distance(const double* parameter)
    kineStr.open("data_Qcal.txt");
 
 
+
     for(Int_t i=0;i<q_array1.size();i++){
 
           q_norm1.push_back(q_array1.at(i)*norm_fact/q_mean[0]);
@@ -323,8 +340,21 @@ Double_t Distance(const double* parameter)
             theta = TMath::ATan2(y_d.at(i),x_d.at(i));
             rad_d = TMath::Sqrt( TMath::Power(x_d.at(i),2) + TMath::Power(y_d.at(i),2)      );
 
-            x_u.push_back( (rad_d/(1+parameter[0]*TMath::Power(rad_d,2)  +   parameter[1]*TMath::Power(rad_d,4)  ) )*TMath::Cos(theta)      );
-            y_u.push_back( (rad_d/(1+parameter[0]*TMath::Power(rad_d,2)  +   parameter[1]*TMath::Power(rad_d,4)  ) )*TMath::Sin(theta)      );
+            //x_u.push_back( (rad_d/(1+parameter[0]*TMath::Power(rad_d,2)  +   parameter[1]*TMath::Power(rad_d,4)  ) )*TMath::Cos(theta)      );
+            //y_u.push_back( (rad_d/(1+parameter[0]*TMath::Power(rad_d,2)  +   parameter[1]*TMath::Power(rad_d,4)  ) )*TMath::Sin(theta)      );
+
+	    Double_t _x_buff = x_d.at(i);
+	    Double_t _y_buff = y_d.at(i);
+
+	    std::cout<<" Entry : "<<i<<"/"<<q_array1.size()<<std::endl;
+
+	    Double_t var[2] = {_x_buff,_y_buff};
+	    x_u.push_back(x_d.at(i)+EvalFit(var,parx));
+	    var[0] = _y_buff;
+            var[1] = _x_buff;
+	    y_u.push_back(y_d.at(i)+EvalFit(var,pary));
+            //y_u.push_back(y_d.at(i));
+
 
             XY_hist_u->Fill(x_u.at(i),y_u.at(i));
 
@@ -456,28 +486,8 @@ cv::Mat rotate(cv::Mat src, double angle)
 Double_t EvalFit(Double_t *_var, Double_t *_p)
 {
 
-	
-	TF1 f1("f1","x");
-	TF1 f2("f2","x");
-	TF2 f3("f3","x*y");
-        TF1 f4("f4","x*x");
-	TF1 f5("f5","x*x");
-	TF1 f6("f6","x*x*x");	
-	TF2 f7("f7","x*y*y");
-	TF2 f8("f7","x*x*y");
-	TF1 f9("f9","x*x*x");
-	TF2 f10("f10","x*y*y*y*y");
-	TF2 f11("f11","x*y*y*y");
-	TF2 f12("f12","x*x*x*y*y");
-
-
-	TF2 fsum("fsum",[&](double *var, double *p){ return p[0] + p[1]*f1(var[0]) + p[2]*f2(var[1]) + p[3]*f3(var[0],var[1]) 
-	+ p[4]*f4(var[1]) + p[5]*f5(var[0]) + p[6]*f6(var[1]) + p[7]*f7(var[0],var[1]) + p[8]*f8(var[0],var[1]) + p[9]*f9(var[0]) 
-	+ p[10]*f10(var[0],var[1]) + p[11]*f11(var[0],var[1]) + p[12]*f12(var[0],var[1])  ; },-50,50,-50,50,3);
 
 	Double_t result = fsum.EvalPar(_var,_p);
-	//std::cout<<result<<std::endl;	
-
 	return result;
 
 }
